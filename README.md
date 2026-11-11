@@ -2,9 +2,6 @@
 
 A MATLAB benchmark comparing **Dijkstra's algorithm** and **A\*** for grid-based mobile robot path planning. It runs both planners on 45 seeded random maps, tests three A* heuristics, compares two open-list data structures, and drives a simulated two-wheeled robot along the planned path.
 
-> Course project, **Robotics and Automation (BECE312L)**, School of Electronics Engineering, VIT Chennai
-> Faculty: Dr. Bharathi Sankar
-
 | Team member | Register number |
 |---|---|
 | Dhanya S | 23BEC1432 |
