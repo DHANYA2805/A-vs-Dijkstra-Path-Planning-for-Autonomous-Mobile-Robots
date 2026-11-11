@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A* vs Dijkstra - Path Planning Dashboard</title>
+<style>
+  :root {
+    color-scheme: light;
+    --navy: #21295C;
+    --deep: #065A82;
+    --teal: #1C7293;
+    --mint: #8FD3C8;
+    --bg: #F5F8FA;
+    --panel: #FFFFFF;
+    --line: #D9E4E8;
+    --ink: #1B1F26;
+    --muted: #5B6B75;
+    --dij: #21295C;
+    --astar: #2E8B6F;
+    --warn: #B23A48;
+    --serif: Cambria, "Hoefler Text", Georgia, serif;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Calibri, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.5; }
+  header { background: var(--navy); color: #fff; padding: 18px 28px 0; }
+  header h1 { font-family: var(--serif); font-size: 26px; font-weight: 700; margin: 0; letter-spacing: 0.2px; }
+  header p { margin: 2px 0 14px; color: var(--mint); font-size: 14px; }
+  nav { display: flex; gap: 2px; flex-wrap: wrap; }
+  nav button {
+    background: transparent; border: 0; color: #C9D6EA; font: 600 14px var(--sans);
+    padding: 10px 16px; border-radius: 8px 8px 0 0; cursor: pointer;
+  }
+  nav button:hover { color: #fff; }
+  nav button[aria-selected="true"] { background: var(--bg); color: var(--navy); }
+  nav button:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible { outline: 3px solid var(--mint); outline-offset: 2px; }
+  main { padding: 22px 28px 40px; max-width: 1400px; margin: 0 auto; }
+  section[role="tabpanel"] { display: none; }
+  section[role="tabpanel"].active { display: block; }
+  h2 { font-family: var(--serif); font-size: 24px; color: var(--navy); margin: 0 0 4px; }
+  .lede { color: var(--muted); margin: 0 0 18px; max-width: 78ch; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .note { background: #EAF3F6; border-radius: 10px; padding: 12px 16px; margin-top: 16px; max-width: 100ch; }
+  .note b { color: var(--navy); }
+  svg { display: block; width: 100%; height: auto; }
+  #f3 svg { max-width: 720px; margin: 0 auto; }
+  svg text { font-family: var(--sans); fill: var(--ink); }
+
+  /* status strip */
+  #status { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; margin-bottom: 20px; }
+  #status .bar { flex: 1 1 200px; height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; min-width: 160px; }
+  #status .fill { height: 100%; width: 0; background: var(--deep); transition: width 0.2s; }
+  #facts { display: none; gap: 26px; flex-wrap: wrap; }
+  #facts div { font-size: 13px; color: var(--muted); }
+  #facts strong { display: block; font-family: var(--serif); font-size: 21px; color: var(--deep); }
+
+  /* buttons and controls */
+  button.primary, button.secondary {
+    font: 600 14px var(--sans); padding: 9px 16px; border-radius: 8px; cursor: pointer; border: 1px solid var(--deep);
+  }
+  button.primary { background: var(--deep); color: #fff; }
+  button.primary:hover { background: var(--navy); }
+  button.secondary { background: #fff; color: var(--deep); }
+  button.secondary:hover { background: #EAF3F6; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  label.ctl { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 12px; }
+  label.ctl select, label.ctl input[type="number"] { display: block; width: 100%; margin-top: 4px; font: 14px var(--sans); padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--ink); }
+  .tools { display: flex; gap: 6px; margin: 4px 0 14px; }
+  .tools button { flex: 1; font: 600 13px var(--sans); padding: 7px 4px; border-radius: 6px; border: 1px solid var(--line); background: #fff; color: var(--ink); cursor: pointer; }
+  .tools button[aria-pressed="true"] { background: var(--navy); color: #fff; border-color: var(--navy); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* live planner */
+  .live { display: grid; grid-template-columns: 290px 1fr; gap: 18px; align-items: start; }
+  .boards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .board h3 { font-family: var(--serif); font-size: 18px; margin: 0 0 2px; }
+  .board .count { color: var(--muted); font-size: 13px; margin-bottom: 8px; min-height: 20px; }
+  .board canvas { width: 100%; aspect-ratio: 1 / 1; display: block; border-radius: 6px; border: 1px solid var(--line); cursor: crosshair; touch-action: none; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-top: 10px; }
+  .legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; background: var(--c); border: 1px solid #0002; }
+  #verdict { font-weight: 600; margin-top: 12px; min-height: 24px; }
+  #verdict.bad { color: var(--warn); }
+  #verdict.good { color: var(--astar); }
+
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: right; }
+  th:first-child, td:first-child, th.l, td.l { text-align: left; }
+  th { color: var(--navy); background: #EAF3F6; position: sticky; top: 0; }
+  .scroll { max-height: 560px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+
+  /* guideline */
+  .guide { display: grid; grid-template-columns: 90px repeat(3, 1fr); gap: 6px; }
+  .guide .hd { font-weight: 700; color: var(--navy); text-align: center; align-self: end; padding-bottom: 4px; }
+  .guide .rl { font-weight: 700; color: var(--navy); align-self: center; }
+  .guide .cell { border-radius: 8px; padding: 18px 10px; text-align: center; min-height: 110px; display: flex; flex-direction: column; justify-content: center; }
+  .guide .cell strong { font-family: var(--serif); font-size: 17px; display: block; margin-bottom: 4px; }
+  .lv1 { background: #DCEBF2; color: var(--ink); }
+  .lv2 { background: #7FB3CF; color: #0B2233; }
+  .lv3 { background: var(--navy); color: #fff; }
+
+  .robot { display: grid; grid-template-columns: minmax(300px, 520px) 1fr; gap: 16px; align-items: start; }
+  .robot canvas { width: 100%; aspect-ratio: 1 / 1; border-radius: 6px; border: 1px solid var(--line); display: block; }
+
+  @media (max-width: 960px) {
+    .grid2, .grid3, .live, .robot, .boards { grid-template-columns: 1fr; }
+    main { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Autonomous Mobile Robot Path Planning: A* vs Dijkstra</h1>
+  <p>Robotics and Automation (BECE312L) &nbsp;|&nbsp; Nithujaa J, Dhanya S, Sri Nithi Sathiyamoorthy</p>
+  <nav role="tablist" aria-label="Dashboard sections">
+    <button role="tab" aria-selected="true" aria-controls="t-live" id="b-live">Live planner</button>
+    <button role="tab" aria-selected="false" aria-controls="t-f1" id="b-f1">Fig 1: Heuristics</button>
+    <button role="tab" aria-selected="false" aria-controls="t-f2" id="b-f2">Fig 2: Manhattan</button>
+    <button role="tab" aria-selected="false" aria-controls="t-f3" id="b-f3">Fig 3: Open list</button>
+    <button role="tab" aria-selected="false" aria-controls="t-f4" id="b-f4">Fig 4 &amp; 5: Robot</button>
+    <button role="tab" aria-selected="false" aria-controls="t-f6" id="b-f6">Fig 6: Guideline</button>
+    <button role="tab" aria-selected="false" aria-controls="t-data" id="b-data">Data</button>
+  </nav>
+</header>
+
+<main>
+  <div id="status" aria-live="polite">
+    <span id="statusText">Running the benchmark on 45 random maps...</span>
+    <div class="bar"><div class="fill" id="progress"></div></div>
+    <div id="facts"></div>
+  </div>
+
+  <!-- LIVE PLANNER -->
+  <section role="tabpanel" id="t-live" class="active" aria-labelledby="b-live">
+    <h2>Try it yourself</h2>
+    <p class="lede">Both planners search the same map from the blue start to the red goal. Draw or erase walls, move the start and goal, then press Find paths to watch how many cells each algorithm explores.</p>
+    <div class="live">
+      <div class="panel">
+        <label class="ctl">Map size
+          <select id="lSize">
+            <option value="20">20 x 20</option>
+            <option value="30" selected>30 x 30</option>
+            <option value="50">50 x 50</option>
+            <option value="100">100 x 100</option>
+          </select>
+        </label>
+        <label class="ctl">Obstacle density
+          <select id="lDens">
+            <option value="0">Empty</option>
+            <option value="0.1">Sparse (10%)</option>
+            <option value="0.2" selected>Medium (20%)</option>
+            <option value="0.3">Dense (30%)</option>
+          </select>
+        </label>
+        <label class="ctl">A* heuristic
+          <select id="lHeur">
+            <option value="octile" selected>Octile</option>
+            <option value="euclidean">Euclidean</option>
+            <option value="manhattan">Manhattan</option>
+          </select>
+        </label>
+        <div style="font-size:13px;font-weight:600;color:var(--muted)">Click or drag on a map to</div>
+        <div class="tools" role="group" aria-label="Editing tool">
+          <button data-tool="wall" aria-pressed="true">Walls</button>
+          <button data-tool="start" aria-pressed="false">Start</button>
+          <button data-tool="goal" aria-pressed="false">Goal</button>
+        </div>
+        <div class="row">
+          <button class="primary" id="lRun" style="flex:1">Find paths</button>
+          <button class="secondary" id="lNew" style="flex:1">New map</button>
+        </div>
+        <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-top:12px">
+          <input type="checkbox" id="lAnim" checked> Animate the search
+        </label>
+      </div>
+      <div>
+        <div class="boards">
+          <div class="board"><h3>Dijkstra</h3><div class="count" id="cD">&nbsp;</div><canvas id="cvD" aria-label="Dijkstra search map"></canvas></div>
+          <div class="board"><h3 id="aTitle">A* (Octile)</h3><div class="count" id="cA">&nbsp;</div><canvas id="cvA" aria-label="A* search map"></canvas></div>
+        </div>
+        <div class="legend">
+          <span style="--c:#B9DCF0">Explored by Dijkstra</span>
+          <span style="--c:#F6C38B">Explored by A*</span>
+          <span style="--c:#1B1F26">Obstacle</span>
+          <span style="--c:#2B6CD8">Start</span>
+          <span style="--c:#D33A3A">Goal</span>
+        </div>
+        <div class="panel" style="margin-top:14px">
+          <table id="lTable"><thead><tr><th>Planner</th><th>Cells explored</th><th>Path length</th><th>Planning time</th></tr></thead><tbody></tbody></table>
+          <div id="verdict"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FIG 1 -->
+  <section role="tabpanel" id="t-f1" aria-labelledby="b-f1">
+    <h2>Figure 1: Search effort saved by each A* heuristic</h2>
+    <p class="lede">Percentage of cells A* explored fewer than Dijkstra, averaged over 5 random maps per configuration. Higher means less work.</p>
+    <div class="grid3" id="f1"></div>
+    <div class="note"><b>Takeaway:</b> <span id="f1note">Octile beats Euclidean in every configuration while keeping the shortest path. Manhattan saves the most only by giving up optimality (Figure 2). Savings shrink as obstacles increase.</span></div>
+  </section>
+
+  <!-- FIG 2 -->
+  <section role="tabpanel" id="t-f2" aria-labelledby="b-f2">
+    <h2>Figure 2: Manhattan is not admissible on an 8-connected grid</h2>
+    <p class="lede">A diagonal step really costs 1.41, but Manhattan counts it as 2. Because it overestimates, A* can skip the true shortest path.</p>
+    <div class="grid2"><div class="panel" id="f2a"></div><div class="panel" id="f2b"></div></div>
+    <div class="note"><b>Takeaway:</b> <span id="f2note"></span></div>
+  </section>
+
+  <!-- FIG 3 -->
+  <section role="tabpanel" id="t-f3" aria-labelledby="b-f3">
+    <h2>Figure 3: Binary-heap open list vs linear scan</h2>
+    <p class="lede">Planning time on 100 x 100 maps (log scale). Same algorithms and same paths; only the way the next cell is picked changes.</p>
+    <div class="grid2" style="grid-template-columns:2fr 1fr">
+      <div class="panel" id="f3"></div>
+      <div class="panel"><table id="f3t"><thead><tr><th>Density</th><th>Dijkstra gain</th><th>A* gain</th></tr></thead><tbody></tbody></table></div>
+    </div>
+    <div class="note"><b>Takeaway:</b> <span id="f3note"></span></div>
+  </section>
+
+  <!-- FIG 4 & 5 -->
+  <section role="tabpanel" id="t-f4" aria-labelledby="b-f4">
+    <h2>Figures 4 and 5: Robot following the planned path</h2>
+    <p class="lede">The A* (Octile) path on a 50 x 50 medium-density map is smoothed into straight, obstacle-free segments. A two-wheeled robot then follows it using pure-pursuit steering, which always aims at a point slightly ahead on the path.</p>
+    <div class="robot">
+      <div class="panel">
+        <canvas id="cvR" aria-label="Robot map"></canvas>
+        <div class="legend">
+          <span style="--c:#9AA3AA">Raw A* path</span>
+          <span style="--c:#2B6CD8">Smoothed path</span>
+          <span style="--c:#D33A3A">Robot trajectory</span>
+        </div>
+        <div class="row" style="margin-top:12px"><button class="primary" id="rAnim">Animate robot</button></div>
+      </div>
+      <div>
+        <div class="panel" id="f4w"></div>
+        <div class="panel" id="f4c" style="margin-top:16px"></div>
+        <div class="panel" style="margin-top:16px"><table id="f4t"><thead><tr><th>Path</th><th>Waypoints</th><th>Travel time</th><th>Max error</th><th>Min clearance</th><th>Reached goal</th><th>Collision</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FIG 6 -->
+  <section role="tabpanel" id="t-f6" aria-labelledby="b-f6">
+    <h2>Figure 6: Decision guideline</h2>
+    <p class="lede">When should a robot use A* (Octile) instead of Dijkstra? Each cell is one of the 9 tested configurations.</p>
+    <div class="panel"><div class="guide" id="guide"></div></div>
+    <div class="note"><b>Rule used:</b> Either is fine when Dijkstra explores fewer than 3,000 cells (both finish almost instantly). Otherwise A* is recommended, and strongly recommended when it explores at least 80% fewer cells. <br><b>Dijkstra still wins</b> when a robot needs distances to many goals at once, for example the nearest of several charging docks, because one run gives the distance to every cell.</div>
+  </section>
+
+  <!-- DATA -->
+  <section role="tabpanel" id="t-data" aria-labelledby="b-data">
+    <h2>Benchmark data</h2>
+    <p class="lede">Mean over 5 random maps per configuration. Path excess is how much longer the path is than the true shortest path.</p>
+    <div class="row" style="margin-bottom:12px"><button class="secondary" id="dCsv">Download as CSV</button></div>
+    <div class="scroll"><table id="dT"><thead><tr><th class="l">Map</th><th class="l">Density</th><th class="l">Planner</th><th>Cells explored</th><th>% fewer than Dijkstra</th><th>Time (ms)</th><th>Path length</th><th>Path excess</th><th>Maps not optimal</th></tr></thead><tbody></tbody></table></div>
+  </section>
+</main>
+
+<script>
+"use strict";
+/* ======================= core planning ======================= */
+const SQ2 = Math.SQRT2;
+const MX = [1, -1, 0, 0, 1, 1, -1, -1];
+const MY = [0, 0, 1, -1, 1, -1, 1, -1];
+const MC = [1, 1, 1, 1, SQ2, SQ2, SQ2, SQ2];
+const HEUR = ["none", "euclidean", "octile", "manhattan"];
+const HLAB = ["Dijkstra", "A* Euclidean", "A* Octile", "A* Manhattan"];
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function heuristicArray(n, goal, hType) {
+  const N = n * n, H = new Float64Array(N);
+  if (hType === "none") return H;
+  const gx = goal % n, gy = (goal / n) | 0;
+  for (let i = 0; i < N; i++) {
+    const dx = Math.abs((i % n) - gx), dy = Math.abs(((i / n) | 0) - gy);
+    if (hType === "euclidean") H[i] = Math.hypot(dx, dy);
+    else if (hType === "octile") H[i] = Math.max(dx, dy) + (SQ2 - 1) * Math.min(dx, dy);
+    else H[i] = dx + dy;
+  }
+  return H;
+}
+
+/* 8-connected grid search, no corner cutting.
+   hType "none" = Dijkstra, otherwise A*. engine "heap" or "linear". */
+function search(occ, n, s, g, hType, engine = "heap", record = false) {
+  const N = n * n, H = heuristicArray(n, g, hType);
+  const G = new Float64Array(N).fill(Infinity);
+  const parent = new Int32Array(N).fill(-1);
+  const closed = new Uint8Array(N), inOpen = new Uint8Array(N);
+  const order = record ? [] : null;
+  const heap = engine === "heap";
+  let hk, hn, hN = 0, fOpen;
+  G[s] = 0;
+  if (heap) { hk = new Float64Array(8 * N + 1); hn = new Int32Array(8 * N + 1); hk[0] = H[s]; hn[0] = s; hN = 1; }
+  else { fOpen = new Float64Array(N).fill(Infinity); fOpen[s] = H[s]; }
+  inOpen[s] = 1;
+  let expanded = 0, found = false;
+  while (true) {
+    let cur = -1;
+    if (heap) {
+      while (hN > 0) {
+        const cand = hn[0];
+        hN--; hk[0] = hk[hN]; hn[0] = hn[hN];
+        let i = 0;
+        while (true) {
+          const l = 2 * i + 1;
+          if (l >= hN) break;
+          let c = l;
+          if (l + 1 < hN && hk[l + 1] < hk[l]) c = l + 1;
+          if (hk[i] <= hk[c]) break;
+          let t = hk[i]; hk[i] = hk[c]; hk[c] = t;
+          t = hn[i]; hn[i] = hn[c]; hn[c] = t;
+          i = c;
+        }
+        if (!closed[cand]) { cur = cand; break; }
+      }
+      if (cur < 0) break;
+    } else {
+      let best = Infinity;
+      for (let i = 0; i < N; i++) if (fOpen[i] < best) { best = fOpen[i]; cur = i; }
+      if (cur < 0) break;
+      fOpen[cur] = Infinity;
+    }
+    inOpen[cur] = 0; closed[cur] = 1; expanded++;
+    if (order) order.push(cur);
+    if (cur === g) { found = true; break; }
+    const cx = cur % n, cy = (cur / n) | 0;
+    for (let m = 0; m < 8; m++) {
+      const nx = cx + MX[m], ny = cy + MY[m];
+      if (nx < 0 || nx >= n || ny < 0 || ny >= n) continue;
+      const ni = ny * n + nx;
+      if (occ[ni] || closed[ni]) continue;
+      if (MX[m] && MY[m] && (occ[cy * n + nx] || occ[ny * n + cx])) continue;
+      const gn = G[cur] + MC[m];
+      if (gn < G[ni]) {
+        G[ni] = gn; parent[ni] = cur;
+        const key = gn + H[ni];
+        inOpen[ni] = 1;
+        if (heap) {
+          let i = hN++; hk[i] = key; hn[i] = ni;
+          while (i > 0) {
+            const p = (i - 1) >> 1;
+            if (hk[p] <= hk[i]) break;
+            let t = hk[i]; hk[i] = hk[p]; hk[p] = t;
+            t = hn[i]; hn[i] = hn[p]; hn[p] = t;
+            i = p;
+          }
+        } else fOpen[ni] = key;
+      }
+    }
+  }
+  const path = [];
+  if (found) { let c = g; while (c !== -1) { path.push([c % n, (c / n) | 0]); c = parent[c]; } path.reverse(); }
+  return { found, length: found ? G[g] : Infinity, nodes: expanded, path, order, closed };
+}
+
+function timeIt(fn) {
+  const t0 = performance.now(); let count = 0;
+  do { fn(); count++; } while (performance.now() - t0 < 12 && count < 300);
+  return (performance.now() - t0) / count;
+}
+
+function clearAround(occ, n, idx) {
+  const x = idx % n, y = (idx / n) | 0;
+  for (let yy = Math.max(0, y - 1); yy <= Math.min(n - 1, y + 1); yy++)
+    for (let xx = Math.max(0, x - 1); xx <= Math.min(n - 1, x + 1); xx++) occ[yy * n + xx] = 0;
+}
+
+function makeMap(n, dens, seed) {
+  const s = 1 * n + 1, g = (n - 2) * n + (n - 2);
+  for (let attempt = 0; attempt <= 60; attempt++) {
+    const rnd = mulberry32(seed + 7919 * attempt);
+    const occ = new Uint8Array(n * n);
+    for (let i = 0; i < n * n; i++) occ[i] = rnd() < dens ? 1 : 0;
+    clearAround(occ, n, s); clearAround(occ, n, g);
+    if (search(occ, n, s, g, "none").found) return { occ, n, s, g };
+  }
+  throw new Error("Could not generate a solvable map");
+}
+
+/* ======================= robot ======================= */
+function lineFree(p, q, occ, n, clr) {
+  const dx = q[0] - p[0], dy = q[1] - p[1], L = Math.hypot(dx, dy);
+  if (L === 0) return true;
+  const steps = Math.max(2, Math.ceil(L / 0.05)), nx = -dy / L, ny = dx / L;
+  for (const off of [0, clr, -clr]) {
+    for (let k = 0; k <= steps; k++) {
+      const t = k / steps;
+      const x = Math.round(p[0] + t * dx + off * nx), y = Math.round(p[1] + t * dy + off * ny);
+      if (x < 0 || x >= n || y < 0 || y >= n || occ[y * n + x]) return false;
+    }
+  }
+  return true;
+}
+function smoothPath(path, occ, n, clr) {
+  const out = [path[0]]; let i = 0;
+  while (i < path.length - 1) {
+    let j = path.length - 1;
+    while (j > i + 1 && !lineFree(path[i], path[j], occ, n, clr)) j--;
+    out.push(path[j]); i = j;
+  }
+  return out;
+}
+function resample(path, ds) {
+  const pts = [path[0]];
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1], b = path[i], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const k = Math.max(1, Math.ceil(L / ds));
+    for (let j = 1; j <= k; j++) pts.push([a[0] + (b[0] - a[0]) * j / k, a[1] + (b[1] - a[1]) * j / k]);
+  }
+  return pts;
+}
+const wrap = a => { a = (a + Math.PI) % (2 * Math.PI); if (a < 0) a += 2 * Math.PI; return a - Math.PI; };
+function simulateRobot(path, occ, n, p) {
+  const ref = resample(path, 0.1), nR = ref.length;
+  const obs = []; for (let i = 0; i < n * n; i++) if (occ[i]) obs.push([i % n, (i / n) | 0]);
+  let x = ref[0][0], y = ref[0][1];
+  const ah = Math.min(10, nR - 1);
+  let th = Math.atan2(ref[ah][1] - y, ref[ah][0] - x);
+  const goal = ref[nR - 1];
+  const traj = [], vR = [], vL = [], cte = []; let prog = 0, reached = false, collided = false, minClr = Infinity;
+  const nMax = Math.ceil(p.maxTime / p.dt);
+  for (let k = 0; k < nMax; k++) {
+    let best = Infinity, bi = prog;
+    for (let i = prog; i < Math.min(prog + 60, nR); i++) {
+      const d = Math.hypot(ref[i][0] - x, ref[i][1] - y);
+      if (d < best) { best = d; bi = i; }
+    }
+    prog = bi;
+    let la = prog;
+    while (la < nR - 1 && Math.hypot(ref[la][0] - x, ref[la][1] - y) < p.L) la++;
+    const alpha = wrap(Math.atan2(ref[la][1] - y, ref[la][0] - x) - th);
+    const dGoal = Math.hypot(goal[0] - x, goal[1] - y);
+    if (dGoal < p.goalTol) { reached = true; break; }
+    const v = p.v * Math.min(1, Math.max(0.2, dGoal / p.L));
+    const w = Math.max(-p.wMax, Math.min(p.wMax, 2 * v * Math.sin(alpha) / p.L));
+    x += v * Math.cos(th) * p.dt; y += v * Math.sin(th) * p.dt; th = wrap(th + w * p.dt);
+    traj.push([x, y, th]); vR.push(v + w * p.b / 2); vL.push(v - w * p.b / 2); cte.push(best);
+    let c = Infinity; for (const o of obs) { const d = Math.hypot(o[0] - x, o[1] - y); if (d < c) c = d; }
+    minClr = Math.min(minClr, c - 0.5);
+    const rx = Math.round(x), ry = Math.round(y);
+    if (rx < 0 || rx >= n || ry < 0 || ry >= n || occ[ry * n + rx]) collided = true;
+  }
+  return { traj, vR, vL, cte, time: traj.length * p.dt, maxCTE: Math.max(...cte), minClr, reached, collided, dt: p.dt };
+}
+
+/* ======================= drawing helpers ======================= */
+function fitCanvas(cv) {
+  const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  const size = Math.max(200, Math.round(r.width));
+  if (cv.width !== size * dpr) { cv.width = size * dpr; cv.height = size * dpr; }
+  const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, size };
+}
+function drawGridMap(cv, M, explored, exploredColor, path, pathColor) {
+  const { ctx, size } = fitCanvas(cv), n = M.n, c = size / n;
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, size, size);
+  const px = i => (i % n) * c, py = i => (n - 1 - ((i / n) | 0)) * c;
+  if (explored) {
+    ctx.fillStyle = exploredColor;
+    for (const i of explored) ctx.fillRect(px(i), py(i), c + 0.5, c + 0.5);
+  }
+  ctx.fillStyle = "#1B1F26";
+  for (let i = 0; i < n * n; i++) if (M.occ[i]) ctx.fillRect(px(i), py(i), c + 0.5, c + 0.5);
+  if (n <= 50) {
+    ctx.strokeStyle = "rgba(0,0,0,0.06)"; ctx.lineWidth = 1; ctx.beginPath();
+    for (let k = 1; k < n; k++) { ctx.moveTo(k * c, 0); ctx.lineTo(k * c, size); ctx.moveTo(0, k * c); ctx.lineTo(size, k * c); }
+    ctx.stroke();
+  }
+  if (path && path.length) drawPath(ctx, path, n, c, pathColor, 3);
+  dot(ctx, M.s, n, c, "#2B6CD8"); dot(ctx, M.g, n, c, "#D33A3A");
+}
+function toPx(p, n, c) { return [(p[0] + 0.5) * c, (n - 1 - p[1] + 0.5) * c]; }
+function drawPath(ctx, path, n, c, color, w, dash) {
+  ctx.strokeStyle = color; ctx.lineWidth = w; ctx.lineJoin = "round"; ctx.setLineDash(dash || []);
+  ctx.beginPath();
+  path.forEach((p, i) => { const [x, y] = toPx(p, n, c); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+  ctx.stroke(); ctx.setLineDash([]);
+}
+function dot(ctx, idx, n, c, color) {
+  const [x, y] = toPx([idx % n, (idx / n) | 0], n, c);
+  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, Math.max(4, c * 0.45), 0, 2 * Math.PI); ctx.fill();
+  ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5; ctx.stroke();
+}
+
+/* SVG charts */
+const SVGNS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, parent, text) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function niceMax(v) { const p = Math.pow(10, Math.floor(Math.log10(v))); for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= v) return m * p; return 10 * p; }
+
+function barChart(container, o) {
+  container.innerHTML = "";
+  const W = 560, H = 360, m = { l: 62, r: 14, t: 66, b: 54 };
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": o.title }, container);
+  el("text", { x: W / 2, y: 20, "text-anchor": "middle", "font-size": 16, "font-weight": 700 }, svg, o.title);
+  // legend
+  let lx = m.l;
+  o.series.forEach(s => {
+    el("rect", { x: lx, y: 34, width: 12, height: 12, fill: s.color, rx: 2 }, svg);
+    const t = el("text", { x: lx + 17, y: 44.5, "font-size": 12.5 }, svg, s.name);
+    lx += 26 + s.name.length * 7;
+  });
+  const pw = W - m.l - m.r, ph = H - m.t - m.b;
+  const all = o.series.flatMap(s => s.values);
+  let y0, y1, ys, ticks;
+  if (o.log) {
+    y0 = Math.floor(Math.log10(Math.min(...all))); y1 = Math.ceil(Math.log10(Math.max(...all)));
+    if (y1 === y0) y1++;
+    ys = v => m.t + ph - (Math.log10(v) - y0) / (y1 - y0) * ph;
+    ticks = []; for (let k = y0; k <= y1; k++) ticks.push(Math.pow(10, k));
+  } else {
+    y0 = 0; y1 = o.yMax || niceMax(Math.max(...all) * 1.08);
+    ys = v => m.t + ph - (v - y0) / (y1 - y0) * ph;
+    ticks = []; for (let k = 0; k <= 5; k++) ticks.push(y1 * k / 5);
+  }
+  ticks.forEach(t => {
+    const y = ys(t);
+    el("line", { x1: m.l, x2: W - m.r, y1: y, y2: y, stroke: "#E3EAEE" }, svg);
+    el("text", { x: m.l - 8, y: y + 4, "text-anchor": "end", "font-size": 12, fill: "#5B6B75" }, svg,
+      o.log ? (t >= 1 ? t.toString() : t.toPrecision(1)) : (Math.round(t * 10) / 10).toString());
+  });
+  const gw = pw / o.cats.length, bw = gw * 0.78 / o.series.length;
+  o.cats.forEach((cat, ci) => {
+    o.series.forEach((s, si) => {
+      const v = s.values[ci];
+      const x = m.l + ci * gw + gw * 0.11 + si * bw;
+      const base = o.log ? ys(Math.pow(10, y0)) : ys(0);
+      const y = ys(Math.max(v, o.log ? Math.pow(10, y0) : 0));
+      el("rect", { x: x + 1, y, width: bw - 2, height: Math.max(0, base - y), fill: s.color, rx: 2 }, svg);
+      if (o.labels) el("text", { x: x + bw / 2, y: y - 4, "text-anchor": "middle", "font-size": 10.5, fill: "#3A4650" }, svg, o.fmt ? o.fmt(v) : v.toFixed(0));
+    });
+    el("text", { x: m.l + ci * gw + gw / 2, y: H - m.b + 20, "text-anchor": "middle", "font-size": 13 }, svg, cat);
+  });
+  el("line", { x1: m.l, x2: W - m.r, y1: m.t + ph, y2: m.t + ph, stroke: "#9AA8B0" }, svg);
+  if (o.xLabel) el("text", { x: m.l + pw / 2, y: H - 8, "text-anchor": "middle", "font-size": 13, fill: "#5B6B75" }, svg, o.xLabel);
+  if (o.yLabel) el("text", { x: 16, y: m.t + ph / 2, "text-anchor": "middle", "font-size": 13, fill: "#5B6B75", transform: `rotate(-90 16 ${m.t + ph / 2})` }, svg, o.yLabel);
+}
+
+function lineChart(container, o) {
+  container.innerHTML = "";
+  const W = 640, H = 250, m = { l: 56, r: 14, t: 50, b: 42 };
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": o.title }, container);
+  el("text", { x: W / 2, y: 18, "text-anchor": "middle", "font-size": 15, "font-weight": 700 }, svg, o.title);
+  let lx = m.l;
+  o.series.forEach(s => {
+    el("rect", { x: lx, y: 28, width: 14, height: 4, fill: s.color }, svg);
+    el("text", { x: lx + 19, y: 34, "font-size": 12 }, svg, s.name);
+    lx += 32 + s.name.length * 7;
+  });
+  const pw = W - m.l - m.r, ph = H - m.t - m.b;
+  const xMax = Math.max(...o.series.map(s => s.x[s.x.length - 1]));
+  const vals = o.series.flatMap(s => s.y);
+  const yMin = o.yMin !== undefined ? o.yMin : Math.min(...vals), yMax = niceMax(Math.max(...vals) * 1.05);
+  const xs = v => m.l + v / xMax * pw, ys = v => m.t + ph - (v - yMin) / (yMax - yMin) * ph;
+  for (let k = 0; k <= 4; k++) {
+    const v = yMin + (yMax - yMin) * k / 4, y = ys(v);
+    el("line", { x1: m.l, x2: W - m.r, y1: y, y2: y, stroke: "#E3EAEE" }, svg);
+    el("text", { x: m.l - 8, y: y + 4, "text-anchor": "end", "font-size": 11.5, fill: "#5B6B75" }, svg, v.toFixed(2));
+  }
+  const step = niceMax(xMax / 6);
+  for (let v = 0; v <= xMax + 1e-9; v += step / 2 >= 1 ? step : step) {
+    el("text", { x: xs(v), y: H - m.b + 16, "text-anchor": "middle", "font-size": 11.5, fill: "#5B6B75" }, svg, Math.round(v).toString());
+  }
+  o.series.forEach(s => {
+    let d = ""; const stride = Math.max(1, Math.floor(s.x.length / 700));
+    for (let i = 0; i < s.x.length; i += stride) d += (d ? "L" : "M") + xs(s.x[i]).toFixed(1) + "," + ys(s.y[i]).toFixed(1);
+    el("path", { d, fill: "none", stroke: s.color, "stroke-width": s.w || 1.8 }, svg);
+  });
+  el("line", { x1: m.l, x2: W - m.r, y1: m.t + ph, y2: m.t + ph, stroke: "#9AA8B0" }, svg);
+  el("text", { x: m.l + pw / 2, y: H - 6, "text-anchor": "middle", "font-size": 12.5, fill: "#5B6B75" }, svg, o.xLabel);
+  el("text", { x: 14, y: m.t + ph / 2, "text-anchor": "middle", "font-size": 12.5, fill: "#5B6B75", transform: `rotate(-90 14 ${m.t + ph / 2})` }, svg, o.yLabel);
+}
+
+/* ======================= tabs ======================= */
+const tabs = [...document.querySelectorAll('[role="tab"]')];
+tabs.forEach(t => t.addEventListener("click", () => selectTab(t)));
+document.querySelector('[role="tablist"]').addEventListener("keydown", e => {
+  const i = tabs.indexOf(document.activeElement);
+  if (i < 0) return;
+  if (e.key === "ArrowRight") { tabs[(i + 1) % tabs.length].focus(); e.preventDefault(); }
+  if (e.key === "ArrowLeft") { tabs[(i - 1 + tabs.length) % tabs.length].focus(); e.preventDefault(); }
+});
+function selectTab(t) {
+  tabs.forEach(b => b.setAttribute("aria-selected", b === t ? "true" : "false"));
+  document.querySelectorAll('[role="tabpanel"]').forEach(p => p.classList.toggle("active", p.id === t.getAttribute("aria-controls")));
+  if (t.id === "b-live") redrawLive();
+  if (t.id === "b-f4" && B) drawRobotStatic();
+}
+
+/* ======================= live planner ======================= */
+const L = { M: null, tool: "wall", res: null, anim: 0 };
+const $ = id => document.getElementById(id);
+const cvD = $("cvD"), cvA = $("cvA");
+
+function newLiveMap(randomSeed = true) {
+  const n = +$("lSize").value, d = +$("lDens").value;
+  const seed = randomSeed ? Math.floor(Math.random() * 1e6) : 1;
+  L.M = makeMap(n, d, seed); L.res = null;
+  $("cD").textContent = "\u00a0"; $("cA").textContent = "\u00a0";
+  $("lTable").tBodies[0].innerHTML = ""; $("verdict").textContent = ""; $("verdict").className = "";
+  redrawLive();
+}
+function heurName() { return $("lHeur").selectedOptions[0].textContent; }
+function redrawLive(kD, kA) {
+  if (!L.M) return;
+  $("aTitle").textContent = `A* (${heurName()})`;
+  const r = L.res;
+  if (!r) { drawGridMap(cvD, L.M); drawGridMap(cvA, L.M); return; }
+  const dk = kD === undefined ? r.dij.order.length : kD, ak = kA === undefined ? r.ast.order.length : kA;
+  drawGridMap(cvD, L.M, r.dij.order.slice(0, dk), "#B9DCF0", dk >= r.dij.order.length ? r.dij.path : null, "#21295C");
+  drawGridMap(cvA, L.M, r.ast.order.slice(0, ak), "#F6C38B", ak >= r.ast.order.length ? r.ast.path : null, "#1E7A55");
+  $("cD").textContent = `${dk.toLocaleString()} cells explored`;
+  $("cA").textContent = `${ak.toLocaleString()} cells explored`;
+}
+function runLive() {
+  cancelAnimationFrame(L.anim);
+  const M = L.M, h = $("lHeur").value;
+  const dij = search(M.occ, M.n, M.s, M.g, "none", "heap", true);
+  const ast = search(M.occ, M.n, M.s, M.g, h, "heap", true);
+  if (!dij.found) {
+    L.res = null; redrawLive();
+    $("verdict").textContent = "No path exists: the walls block the goal. Erase a wall and try again.";
+    $("verdict").className = "bad"; $("lTable").tBodies[0].innerHTML = ""; return;
+  }
+  const tD = timeIt(() => search(M.occ, M.n, M.s, M.g, "none"));
+  const tA = timeIt(() => search(M.occ, M.n, M.s, M.g, h));
+  L.res = { dij, ast };
+  const tb = $("lTable").tBodies[0];
+  tb.innerHTML = `<tr><td>Dijkstra</td><td>${dij.nodes.toLocaleString()}</td><td>${dij.length.toFixed(2)}</td><td>${tD.toFixed(3)} ms</td></tr>
+    <tr><td>A* (${heurName()})</td><td>${ast.nodes.toLocaleString()}</td><td>${ast.length.toFixed(2)}</td><td>${tA.toFixed(3)} ms</td></tr>`;
+  const red = 100 * (1 - ast.nodes / dij.nodes);
+  const v = $("verdict");
+  if (ast.length > dij.length + 1e-9) {
+    v.textContent = `A* explored ${red.toFixed(0)}% fewer cells, but its path is ${(100 * (ast.length / dij.length - 1)).toFixed(2)}% longer than the shortest path: ${heurName()} overestimates diagonal moves.`;
+    v.className = "bad";
+  } else {
+    v.textContent = `A* explored ${red.toFixed(0)}% fewer cells and found the same shortest path (length ${dij.length.toFixed(2)}).`;
+    v.className = "good";
+  }
+  if (!$("lAnim").checked || reduceMotion) { redrawLive(); return; }
+  const total = Math.max(dij.order.length, ast.order.length);
+  const per = Math.max(1, Math.ceil(total / 150));
+  let k = 0;
+  const step = () => {
+    k += per;
+    redrawLive(Math.min(k, dij.order.length), Math.min(k, ast.order.length));
+    if (k < total) L.anim = requestAnimationFrame(step);
+  };
+  step();
+}
+function cellFromEvent(cv, e) {
+  const r = cv.getBoundingClientRect(), n = L.M.n;
+  const x = Math.floor((e.clientX - r.left) / r.width * n);
+  const y = n - 1 - Math.floor((e.clientY - r.top) / r.height * n);
+  if (x < 0 || x >= n || y < 0 || y >= n) return -1;
+  return y * n + x;
+}
+let painting = false, paintValue = 1;
+function onPointer(cv, e, down) {
+  const i = cellFromEvent(cv, e); if (i < 0) return;
+  const M = L.M;
+  if (L.tool === "wall") {
+    if (i === M.s || i === M.g) return;
+    if (down) paintValue = M.occ[i] ? 0 : 1;
+    if (M.occ[i] === paintValue) return;
+    M.occ[i] = paintValue;
+  } else if (L.tool === "start") { if (M.occ[i] || i === M.g) return; M.s = i; }
+  else { if (M.occ[i] || i === M.s) return; M.g = i; }
+  cancelAnimationFrame(L.anim); L.res = null;
+  $("cD").textContent = "\u00a0"; $("cA").textContent = "\u00a0";
+  $("verdict").textContent = ""; $("lTable").tBodies[0].innerHTML = "";
+  redrawLive();
+}
+[cvD, cvA].forEach(cv => {
+  cv.addEventListener("pointerdown", e => { painting = true; cv.setPointerCapture(e.pointerId); onPointer(cv, e, true); });
+  cv.addEventListener("pointermove", e => { if (painting && L.tool === "wall") onPointer(cv, e, false); });
+  cv.addEventListener("pointerup", () => { painting = false; });
+});
+document.querySelectorAll(".tools button").forEach(b => b.addEventListener("click", () => {
+  L.tool = b.dataset.tool;
+  document.querySelectorAll(".tools button").forEach(x => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+}));
+$("lRun").addEventListener("click", runLive);
+$("lNew").addEventListener("click", () => newLiveMap(true));
+$("lSize").addEventListener("change", () => newLiveMap(true));
+$("lDens").addEventListener("change", () => newLiveMap(true));
+$("lHeur").addEventListener("change", () => { if (L.res) runLive(); else redrawLive(); });
+window.addEventListener("resize", () => { redrawLive(); if (B) drawRobotStatic(); });
+
+/* ======================= benchmark ======================= */
+const SIZES = [20, 50, 100], DENS = [0.1, 0.2, 0.3], DNAMES = ["Sparse", "Medium", "Dense"], TRIALS = 5;
+let B = null;
+const tick = () => new Promise(r => setTimeout(r, 0));
+
+async function runBenchmark() {
+  const nodes = [], tms = [], plen = [], exMean = [], exMax = [], exFrac = [], maps = [];
+  let done = 0, optimal = 0;
+  const total = SIZES.length * DENS.length * TRIALS;
+  for (let si = 0; si < 3; si++) {
+    nodes.push([]); tms.push([]); plen.push([]); exMean.push([]); exMax.push([]); exFrac.push([]); maps.push([]);
+    for (let di = 0; di < 3; di++) {
+      const acc = HEUR.map(() => ({ n: [], t: [], l: [], e: [] }));
+      maps[si].push([]);
+      for (let t = 1; t <= TRIALS; t++) {
+        const M = makeMap(SIZES[si], DENS[di], 2026 + 1000 * (si + 1) + 100 * (di + 1) + t);
+        maps[si][di].push(M);
+        let opt = 0;
+        HEUR.forEach((h, hi) => {
+          const r = search(M.occ, M.n, M.s, M.g, h);
+          if (hi === 0) opt = r.length;
+          acc[hi].n.push(r.nodes); acc[hi].l.push(r.length);
+          acc[hi].e.push(100 * (r.length / opt - 1));
+          acc[hi].t.push(timeIt(() => search(M.occ, M.n, M.s, M.g, h)));
+        });
+        if (Math.abs(acc[2].e[t - 1]) < 1e-9) optimal++;
+        done++;
+        setProgress(0.7 * done / total, `Heuristic benchmark: map ${done} of ${total}`);
+        await tick();
+      }
+      const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+      nodes[si].push(acc.map(a => mean(a.n))); tms[si].push(acc.map(a => mean(a.t)));
+      plen[si].push(acc.map(a => mean(a.l))); exMean[si].push(acc.map(a => mean(a.e)));
+      exMax[si].push(acc.map(a => Math.max(...a.e))); exFrac[si].push(acc.map(a => 100 * mean(a.e.map(v => (v > 1e-9 ? 1 : 0)))));
+    }
+  }
+  // open list comparison on 100x100 maps
+  const ol = [];
+  for (let di = 0; di < 3; di++) {
+    const acc = [[], [], [], []];
+    for (const M of maps[2][di]) {
+      const run = (h, e) => timeIt(() => search(M.occ, M.n, M.s, M.g, h, e));
+      acc[0].push(run("none", "linear")); acc[1].push(run("none", "heap"));
+      acc[2].push(run("euclidean", "linear")); acc[3].push(run("euclidean", "heap"));
+      await tick();
+    }
+    ol.push(acc.map(a => a.reduce((x, y) => x + y, 0) / a.length));
+    setProgress(0.7 + 0.25 * (di + 1) / 3, "Comparing heap and linear open lists on 100 x 100 maps");
+  }
+  // robot
+  setProgress(0.97, "Simulating the robot");
+  await tick();
+  const RM = maps[1][1][0];
+  const pl = search(RM.occ, RM.n, RM.s, RM.g, "octile");
+  const raw = pl.path, smo = smoothPath(raw, RM.occ, RM.n, 0.35);
+  const rp = { v: 1, L: 1.5, wMax: 2.5, b: 0.5, dt: 0.05, goalTol: 0.3, maxTime: 3 * pl.length + 20 };
+  const simRaw = simulateRobot(raw, RM.occ, RM.n, rp), simSmo = simulateRobot(smo, RM.occ, RM.n, rp);
+  B = { nodes, tms, plen, exMean, exMax, exFrac, ol, RM, raw, smo, simRaw, simSmo, optimal, total };
+  setProgress(1, "");
+  renderAll();
+}
+function setProgress(f, msg) {
+  $("progress").style.width = (100 * f).toFixed(0) + "%";
+  if (msg) $("statusText").textContent = msg;
+}
+
+/* ======================= render results ======================= */
+const HCOL = ["#21295C", "#3E85A6", "#2E8B6F", "#C2603A"];
+const DCOL = ["#065A82", "#4FA3C2", "#9ED7CC"];
+const mean2 = a => a.flat().reduce((x, y) => x + y, 0) / a.flat().length;
+
+function renderAll() {
+  const red = (si, di, hi) => 100 * (1 - B.nodes[si][di][hi] / B.nodes[si][di][0]);
+  const octAvg = mean2(B.nodes.map(r => r.map(c => c[2]))), eucAvg = mean2(B.nodes.map(r => r.map(c => c[1])));
+  const manFrac = mean2(B.exFrac.map(r => r.map(c => c[3])));
+  const manMax = Math.max(...B.exMax.flat().map(c => c[3]));
+  const heapGain = mean2(B.ol.map(r => [r[0] / r[1], r[2] / r[3]]));
+  const maxRed = Math.max(...[0, 1, 2].flatMap(si => [0, 1, 2].map(di => red(si, di, 2))));
+
+  $("status").querySelector(".bar").style.display = "none";
+  $("statusText").innerHTML = "<b>Benchmark complete.</b> Computed live in this browser:";
+  const f = $("facts"); f.style.display = "flex";
+  f.innerHTML = `<div><strong>${B.total}</strong>random maps</div>
+    <div><strong>${B.optimal} / ${B.total}</strong>A* Octile optimal</div>
+    <div><strong>Octile</strong>best heuristic</div>
+    <div><strong>${maxRed.toFixed(0)}%</strong>max search saved</div>
+    <div><strong>${manFrac.toFixed(0)}%</strong>Manhattan not optimal</div>
+    <div><strong>${heapGain.toFixed(0)}x</strong>heap speed-up</div>`;
+
+  // Fig 1
+  const f1 = $("f1"); f1.innerHTML = "";
+  DNAMES.forEach((dn, di) => {
+    const p = document.createElement("div"); p.className = "panel"; f1.appendChild(p);
+    barChart(p, {
+      title: `${dn} obstacles (${Math.round(DENS[di] * 100)}%)`, cats: SIZES.map(s => `${s}x${s}`),
+      series: [1, 2, 3].map(hi => ({ name: HLAB[hi].replace("A* ", ""), color: HCOL[hi], values: SIZES.map((_, si) => red(si, di, hi)) })),
+      yMax: 100, yLabel: "% fewer cells than Dijkstra", xLabel: "Map size", labels: true, fmt: v => v.toFixed(0)
+    });
+  });
+  $("f1note").textContent = `Octile explored ${Math.round(octAvg).toLocaleString()} cells on average against ${Math.round(eucAvg).toLocaleString()} for Euclidean, and both always kept the shortest path. Manhattan saves the most only by giving up optimality (Figure 2). Savings shrink as obstacles increase, because walls force detours the estimate cannot foresee.`;
+
+  // Fig 2
+  barChart($("f2a"), {
+    title: "Manhattan: path length penalty", cats: SIZES.map(s => `${s}x${s}`),
+    series: DNAMES.map((dn, di) => ({ name: dn, color: DCOL[di], values: SIZES.map((_, si) => B.exMean[si][di][3]) })),
+    yLabel: "Mean path excess over shortest (%)", xLabel: "Map size", labels: true, fmt: v => v.toFixed(2)
+  });
+  barChart($("f2b"), {
+    title: "Manhattan: how often it is not optimal", cats: SIZES.map(s => `${s}x${s}`),
+    series: DNAMES.map((dn, di) => ({ name: dn, color: DCOL[di], values: SIZES.map((_, si) => B.exFrac[si][di][3]) })),
+    yMax: 100, yLabel: "% of maps with a longer path", xLabel: "Map size", labels: true, fmt: v => v.toFixed(0)
+  });
+  $("f2note").textContent = `Manhattan gave a longer-than-shortest path on ${manFrac.toFixed(0)}% of maps, up to ${manMax.toFixed(2)}% longer. For a robot that moves diagonally, Octile is the correct choice: it is admissible and still explores the fewest cells.`;
+
+  // Fig 3
+  barChart($("f3"), {
+    title: "Planning time on 100 x 100 maps", cats: DNAMES, log: true,
+    series: ["Dijkstra, linear", "Dijkstra, heap", "A*, linear", "A*, heap"].map((nm, k) => ({
+      name: nm, color: ["#21295C", "#C2603A", "#D9A62B", "#7B3FC4"][k], values: B.ol.map(r => r[k]) })),
+    yLabel: "Time (ms, log scale)", xLabel: "Obstacle density", labels: true, fmt: v => v < 1 ? v.toFixed(2) : v.toFixed(1)
+  });
+  $("f3t").tBodies[0].innerHTML = B.ol.map((r, di) => `<tr><td>${DNAMES[di]}</td><td>${(r[0] / r[1]).toFixed(0)}x</td><td>${(r[2] / r[3]).toFixed(0)}x</td></tr>`).join("");
+  $("f3note").textContent = `The binary heap finds the lowest-cost cell instantly instead of scanning the whole map, making planning about ${heapGain.toFixed(0)} times faster with identical paths. A* stays faster than Dijkstra with either method.`;
+
+  // Fig 4
+  drawRobotStatic();
+  const t = arr => arr.map((_, i) => (i + 1) * B.simSmo.dt);
+  lineChart($("f4w"), {
+    title: "Wheel speeds (differential drive)", xLabel: "Time (s)", yLabel: "Speed (cells/s)", yMin: 0,
+    series: [{ name: "Right wheel", color: "#3E85A6", x: t(B.simSmo.vR), y: B.simSmo.vR }, { name: "Left wheel", color: "#C2603A", x: t(B.simSmo.vL), y: B.simSmo.vL }]
+  });
+  lineChart($("f4c"), {
+    title: "Distance from the planned path", xLabel: "Time (s)", yLabel: "Error (cells)", yMin: 0,
+    series: [{ name: "Raw path", color: "#9AA3AA", x: t(B.simRaw.cte), y: B.simRaw.cte, w: 1.4 }, { name: "Smoothed path", color: "#D33A3A", x: t(B.simSmo.cte), y: B.simSmo.cte }]
+  });
+  const row = (nm, p, s) => `<tr><td>${nm}</td><td>${p.length}</td><td>${s.time.toFixed(1)} s</td><td>${s.maxCTE.toFixed(2)} cells</td><td>${s.minClr.toFixed(2)} cells</td><td>${s.reached ? "Yes" : "No"}</td><td>${s.collided ? "Yes" : "No"}</td></tr>`;
+  $("f4t").tBodies[0].innerHTML = row("Raw A* path", B.raw, B.simRaw) + row("Smoothed path", B.smo, B.simSmo);
+
+  // Fig 6
+  const g = $("guide");
+  let html = `<div></div>` + DNAMES.map(d => `<div class="hd">${d}</div>`).join("");
+  SIZES.forEach((s, si) => {
+    html += `<div class="rl">${s} x ${s}</div>`;
+    DNAMES.forEach((_, di) => {
+      const r = red(si, di, 2), sp = B.tms[si][di][0] / B.tms[si][di][2], dn = B.nodes[si][di][0];
+      const lv = dn < 3000 ? 1 : (r >= 80 ? 3 : 2);
+      const txt = ["Either is fine", "A* recommended", "A* strongly recommended"][lv - 1];
+      html += `<div class="cell lv${lv}"><strong>${txt}</strong>${r.toFixed(0)}% fewer cells<br>${sp.toFixed(1)}x faster</div>`;
+    });
+  });
+  g.innerHTML = html;
+
+  // Data
+  const rows = [];
+  SIZES.forEach((s, si) => DNAMES.forEach((dn, di) => HEUR.forEach((_, hi) => rows.push([
+    `${s}x${s}`, dn, HLAB[hi], B.nodes[si][di][hi].toFixed(0), hi ? red(si, di, hi).toFixed(1) + "%" : "-",
+    B.tms[si][di][hi].toFixed(3), B.plen[si][di][hi].toFixed(2), B.exMean[si][di][hi].toFixed(2) + "%",
+    B.exFrac[si][di][hi].toFixed(0) + "%"]))));
+  $("dT").tBodies[0].innerHTML = rows.map(r => `<tr>${r.map((c, i) => `<td class="${i < 3 ? "l" : ""}">${c}</td>`).join("")}</tr>`).join("");
+  B.rows = rows;
+}
+
+let robotAnim = 0;
+function drawRobotStatic(k) {
+  const cv = $("cvR"), M = B.RM, { ctx, size } = fitCanvas(cv), n = M.n, c = size / n;
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = "#1B1F26";
+  for (let i = 0; i < n * n; i++) if (M.occ[i]) ctx.fillRect((i % n) * c, (n - 1 - ((i / n) | 0)) * c, c + 0.5, c + 0.5);
+  drawPath(ctx, B.raw, n, c, "#9AA3AA", 2, [3, 3]);
+  drawPath(ctx, B.smo, n, c, "#2B6CD8", 2, [7, 4]);
+  B.smo.forEach(p => { const [x, y] = toPx(p, n, c); ctx.fillStyle = "#2B6CD8"; ctx.beginPath(); ctx.arc(x, y, 3, 0, 2 * Math.PI); ctx.fill(); });
+  const tr = B.simSmo.traj, end = k === undefined ? tr.length : k;
+  if (end > 1) drawPath(ctx, tr.slice(0, end).map(p => [p[0], p[1]]), n, c, "#D33A3A", 3);
+  dot(ctx, M.s, n, c, "#2B6CD8"); dot(ctx, M.g, n, c, "#D33A3A");
+  if (k !== undefined && end > 0) {
+    const [x, y, th] = tr[end - 1], [px, py] = toPx([x, y], n, c), r = c * 1.1;
+    ctx.save(); ctx.translate(px, py); ctx.rotate(-th);
+    ctx.fillStyle = "#2E8B6F"; ctx.strokeStyle = "#0B2233"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(r, 0); ctx.lineTo(-0.7 * r, 0.6 * r); ctx.lineTo(-0.7 * r, -0.6 * r); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+}
+$("rAnim").addEventListener("click", () => {
+  if (!B) return;
+  const btn = $("rAnim");
+  if (robotAnim) { cancelAnimationFrame(robotAnim); robotAnim = 0; btn.textContent = "Animate robot"; drawRobotStatic(); return; }
+  btn.textContent = "Stop";
+  let k = 1; const n = B.simSmo.traj.length;
+  const step = () => {
+    k = Math.min(n, k + 3); drawRobotStatic(k);
+    if (k < n) robotAnim = requestAnimationFrame(step);
+    else { robotAnim = 0; btn.textContent = "Animate robot"; }
+  };
+  step();
+});
+$("dCsv").addEventListener("click", () => {
+  if (!B) return;
+  const head = ["Map", "Density", "Planner", "Cells explored", "% fewer than Dijkstra", "Time (ms)", "Path length", "Path excess", "Maps not optimal"];
+  const csv = [head, ...B.rows].map(r => r.join(",")).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  a.download = "path_planning_results.csv"; a.click();
+});
+
+/* ======================= start ======================= */
+newLiveMap(true);
+runBenchmark().catch(e => { $("statusText").textContent = "Benchmark failed: " + e.message; });
+</script>
+</body>
+</html>
